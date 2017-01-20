@@ -1,0 +1,41 @@
+[
+  {
+    "classification": "spark",
+    "properties": {
+      "maximizeResourceAllocation": "true"
+    },
+    "configurations": []
+  },
+  {
+    "classification": "hadoop-env",
+    "properties": {},
+    "configurations": [
+      {
+        "classification": "export",
+        "properties": {
+          "JAVA_HOME": "/usr/lib/jvm/java-1.8.0"
+        },
+        "configurations": []
+      }
+    ]
+  },
+  {
+    "classification": "spark-env",
+    "properties": {},
+    "configurations": [
+      {
+        "classification": "export",
+        "properties": {
+          "JAVA_HOME": "/usr/lib/jvm/java-1.8.0"
+        },
+        "configurations": []
+      }
+    ]
+  },
+  {
+    "Classification": "spark-defaults",
+    "Properties": {
+      "spark.executor.memory": "2G"
+    }
+  }
+]
