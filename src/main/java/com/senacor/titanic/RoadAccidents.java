@@ -5,18 +5,17 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineModel;
 import org.apache.spark.ml.PipelineStage;
-import org.apache.spark.ml.classification.DecisionTreeClassificationModel;
 import org.apache.spark.ml.classification.DecisionTreeClassifier;
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
-import org.apache.spark.ml.feature.*;
+import org.apache.spark.ml.classification.LogisticRegression;
+import org.apache.spark.ml.feature.RFormula;
+import org.apache.spark.ml.feature.StringIndexer;
+import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.SparkSession;
 
-import java.util.Collections;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -35,7 +34,7 @@ import static org.apache.spark.sql.functions.col;
  * Aufgabe 5: Im DecisionTreeModel lässt sich auch die Wahrscheinlichkeit ausgeben, erzeuge auf Basis dieser Wahrscheinlichkeit
  * die Daten für eine in Tableau visualisierte ReveiverOperatingCurve.
  */
-public class Titanic {
+public class RoadAccidents {
 
 
     public static void main(String[] args) {
@@ -50,45 +49,84 @@ public class Titanic {
         //Lade die CSV-Datei mit den Datensaetzen
 
         Dataset dataset = sqlContext.read().format("com.databricks.spark.csv").option("header", "true") // Use first line of all files as header
+                //.option("delimiter" , ";")
                 .option("inferSchema", "true") // Automatically infer data types
-                .load("Titanic.csv");
+                //.load("Titanic.csv");
+                .load("Kaagle_Upload.csv");
+              //  .load("road_accidents.csv");
 
         Dataset[] datasets = dataset.randomSplit(new double[]{0.3, 0.7});
 
+        dataset.show();
+
+        Dataset testData = datasets[0];
+
+
+        Dataset trainingData = datasets[1];
 
         RFormula formula = new RFormula()
                 .setFormula("Survived ~ Class + Sex + Age")
+               // .setFormula("accident ~ age_group + car + job + sex + marital_status")
                 .setFeaturesCol("features")
                 .setLabelCol("label");
 
 
-        Dataset<Row> testData = formula.fit(datasets[0]).transform(datasets[0]);
-        Dataset<Row> trainingData = formula.fit(datasets[1]).transform(datasets[1]);
-        testData.show();
+        Dataset<Row> trainingDataTransformed = formula.fit(trainingData).transform(trainingData);
+        Dataset<Row> testDataTransformed = formula.fit(testData).transform(testData);
+        trainingDataTransformed.show();
 
+/*
+        StringIndexer classIndexer = new StringIndexer()
+                .setInputCol("Class")
+                .setOutputCol("ClassIndex");
+
+        StringIndexer sexIndexer = new StringIndexer()
+                .setInputCol("Sex")
+                .setOutputCol("SexIndex");
+
+        StringIndexer ageIndexer = new StringIndexer()
+                .setInputCol("Age")
+                .setOutputCol("AgeIndex");
+
+        VectorAssembler assembler = new VectorAssembler()
+                .setInputCols(new String[]{"ClassIndex", "SexIndex", "AgeIndex"})
+                .setOutputCol("features");
+*/
+
+/*
+
+        StringIndexer labelIndexer = new StringIndexer()
+                .setInputCol("Survived")
+                .setOutputCol("SurvivedLabel");
+*/
 
         DecisionTreeClassifier dt = new DecisionTreeClassifier()
                 .setLabelCol("label")
                 .setFeaturesCol("features");
 
 
+        LogisticRegression mlr = new LogisticRegression()
+                .setMaxIter(10)
+                .setRegParam(0.3)
+                .setElasticNetParam(0.8)
+                .setFamily("multinomial");
+
+
         Pipeline pipeline = new Pipeline()
-                .setStages(new PipelineStage[]{dt});
+                .setStages(new PipelineStage[]{ dt });
 
 
         //Generiere Model
-        PipelineModel model = pipeline.fit(trainingData);
-
-
+        PipelineModel model = pipeline.fit(trainingDataTransformed);
 
         // Make featurePredictions.
-        Dataset<Row> featurePredictions = model.transform(trainingData);
+        Dataset<Row> featurePredictions = model.transform(testDataTransformed);
 
-        featurePredictions.select("Class", "Sex", "Age", "prediction").orderBy("Class","Sex").show();
+
 
 
         //Test Model
-        Dataset<Row> testPredictions = model.transform(testData);
+        Dataset<Row> testPredictions = model.transform(testDataTransformed);
 
         testPredictions.show(5);
 
@@ -112,41 +150,5 @@ public class Titanic {
 
     }
 
-    public static long getValueFor(Dataset<Row> confMatrix, String label, String prediction){
-        return confMatrix.select("count").where(col("SurvivedLabel").equalTo(label).and(col("prediction").equalTo(prediction))).collectAsList().get(0).getLong(0);
-    }
 
-    public void alternativePipelineConstruction(){
-
-        StringIndexer classIndexer = new StringIndexer()
-                .setInputCol("Class")
-                .setOutputCol("ClassIndex");
-
-        StringIndexer sexIndexer = new StringIndexer()
-                .setInputCol("Sex")
-                .setOutputCol("SexIndex");
-
-        StringIndexer ageIndexer = new StringIndexer()
-                .setInputCol("Age")
-                .setOutputCol("AgeIndex");
-
-        VectorAssembler assembler = new VectorAssembler()
-                .setInputCols(new String[]{"ClassIndex", "SexIndex", "AgeIndex"})
-                .setOutputCol("features");
-
-
-        StringIndexer labelIndexer = new StringIndexer()
-                .setInputCol("Survived")
-                .setOutputCol("SurvivedLabel");
-
-
-        //Model
-        DecisionTreeClassifier dt = new DecisionTreeClassifier()
-                .setLabelCol("SurvivedLabel")
-                .setFeaturesCol("features");
-
-
-        Pipeline pipeline = new Pipeline()
-                .setStages(new PipelineStage[]{classIndexer, sexIndexer, ageIndexer, assembler, labelIndexer, dt});
-    }
 }
